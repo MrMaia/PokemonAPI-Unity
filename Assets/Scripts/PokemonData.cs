@@ -48,10 +48,25 @@ public class PokemonMove
     public Move move; // "move" é um sub-objeto
 }
 
+// --- NOVO: Classe para os detalhes do Move ---
+[Serializable]
+public class MoveDetails
+{
+    public int pp; // O PP que queremos
+    public MoveType type; // O Tipo que queremos
+}
+
+// --- NOVO: Classe para o nome do Tipo ---
+[Serializable]
+public class MoveType
+{
+    public string name;
+}
+
 // --- NOVO: Classe para o nome do Move ---
 [Serializable]
 public class Move
 {
     public string name;
-    // Vamos adicionar a URL aqui no próximo passo para buscar o PP
+    public string url;
 }
