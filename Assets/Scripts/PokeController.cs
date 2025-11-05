@@ -2,7 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
 using System.Collections;
-using TMPro; // Usando TextMeshPro
+using System.Collections.Generic; // Necessário para Dicionário (cache)
+using TMPro;
 
 public class PokeController : MonoBehaviour
 {
@@ -12,14 +13,12 @@ public class PokeController : MonoBehaviour
     public TextMeshProUGUI allyNameText;
     public TextMeshProUGUI allyLevelText; 
     public TextMeshProUGUI allyHpText;    
-    public TextMeshProUGUI[] allyMoveTexts; // (Array de 4 textos, como antes)
+    public TextMeshProUGUI[] allyMoveTexts;
     
-    // --- NOVO: UI para detalhes do primeiro movimento ---
     [Header("UI Detalhes Movimentos")]
-    public TextMeshProUGUI move1_PP_Text; // Texto para o PP (ex: "PP 35/35")
-    public TextMeshProUGUI move1_Type_Text; // Texto para o Tipo (ex: "NORMAL")
-    // (Você pode adicionar mais para move2, move3, move4 depois)
-
+    // RENOMEEI: Estes campos agora são genéricos
+    public TextMeshProUGUI moveDetails_PP_Text; 
+    public TextMeshProUGUI moveDetails_Type_Text; 
 
     [Header("UI do Inimigo")]
     public Image enemySpriteImage;
@@ -27,21 +26,27 @@ public class PokeController : MonoBehaviour
     public TextMeshProUGUI enemyLevelText; 
     public TextMeshProUGUI enemyHpText;    
 
-    // --- URL Base da API ---
+    // --- Caching dos Movimentos ---
+    // Armazena as URLs dos 4 movimentos
+    private List<string> moveUrls = new List<string>();
+    // Armazena os detalhes (PP, Tipo) já buscados
+    private Dictionary<int, MoveDetails> moveCache = new Dictionary<int, MoveDetails>();
+
     private string baseURL = "https://pokeapi.co/api/v2/pokemon/";
 
-    // --- Método de Exemplo ---
     void Start()
     {
-        // Charmander (ID 4) ou Bulbasaur (ID 1) são bons testes
-        StartCoroutine(CarregarPokemon(3)); 
+        int randomPoke = Random.Range(1, 1026);
+        StartCoroutine(CarregarPokemon(randomPoke));
     }
 
-    // --- Coroutine Principal para buscar dados do Pokémon ---
     public IEnumerator CarregarPokemon(int pokemonID)
     {
-        string url = baseURL + pokemonID.ToString();
+        //Limpa o cache e URLs antigas se estiver recarregando
+        moveUrls.Clear();
+        moveCache.Clear();
 
+        string url = baseURL + pokemonID.ToString();
         UnityWebRequest request = UnityWebRequest.Get(url);
         yield return request.SendWebRequest();
 
@@ -54,60 +59,86 @@ public class PokeController : MonoBehaviour
         string jsonResponse = request.downloadHandler.text;
         PokemonData pokemon = JsonUtility.FromJson<PokemonData>(jsonResponse);
 
-        // --- Nomes e Sprites ---
+        //Nomes, Sprites, Level, HP
         string pokeName = CapitalizeFirstLetter(pokemon.name);
         allyNameText.text = pokeName;
         enemyNameText.text = pokeName;
-
         StartCoroutine(CarregarSprite(pokemon.sprites.back_default, allySpriteImage));
         StartCoroutine(CarregarSprite(pokemon.sprites.front_default, enemySpriteImage));
-
-        // --- Level e HP ---
+        
         int currentLevel = 50; 
         allyLevelText.text = "Lvl " + currentLevel;
         enemyLevelText.text = "Lvl " + currentLevel;
-
         int maxHp = 0;
-        foreach (PokemonStat stat in pokemon.stats)
-        {
-            if (stat.stat.name == "hp")
-            {
-                maxHp = stat.base_stat;
-                break; 
-            }
+        foreach (PokemonStat stat in pokemon.stats) {
+            if (stat.stat.name == "hp") { maxHp = stat.base_stat; break; }
         }
-        
         allyHpText.text = maxHp + " / " + maxHp;
         enemyHpText.text = maxHp + " / " + maxHp;
         
-        // --- Processar os 4 Movimentos ---
+        //Processar os 4 Movimentos
         for (int i = 0; i < allyMoveTexts.Length; i++)
         {
             if (allyMoveTexts[i] != null)
             {
                 if (i < pokemon.moves.Length)
                 {
+                    // Preenche o nome do movimento
                     string moveName = CapitalizeFirstLetter(pokemon.moves[i].move.name);
                     allyMoveTexts[i].text = moveName;
-
-                    // --- NOVO: Buscar detalhes do PRIMEIRO movimento ---
-                    if (i == 0)
-                    {
-                        // Pegamos a URL do movimento e iniciamos a nova coroutine
-                        string moveURL = pokemon.moves[i].move.url;
-                        StartCoroutine(CarregarDetalhesDoMovimento(moveURL));
-                    }
+                    
+                    // Salva a URL para buscar DEPOIS (no hover)
+                    moveUrls.Add(pokemon.moves[i].move.url);
                 }
                 else
                 {
                     allyMoveTexts[i].text = " - ";
+                    moveUrls.Add(null); // Adiciona null para slots vazios
                 }
             }
         }
+        
+        // Limpa a UI de detalhes ao carregar
+        ClearMoveDetailsUI();
     }
 
-    // --- NOVO: Coroutine para buscar PP e TIPO do movimento ---
-    private IEnumerator CarregarDetalhesDoMovimento(string moveUrl)
+    // --- FUNÇÕES DE HOVER (Chamadas pelo MoveHoverTrigger.cs) ---
+
+    // Chamada quando o mouse entra em um texto de movimento
+    public void OnMoveHover(int moveIndex)
+    {
+        // Verifica se é um slot de movimento válido (não é "-")
+        if (moveIndex >= moveUrls.Count || moveUrls[moveIndex] == null)
+        {
+            ClearMoveDetailsUI(); // É um slot "-", então limpa a UI
+            return;
+        }
+
+        // 1. Verificar se já temos no cache
+        if (moveCache.ContainsKey(moveIndex))
+        {
+            // Se sim, usa os dados do cache (rápido!)
+            UpdateMoveDetailsUI(moveCache[moveIndex]);
+        }
+        else
+        {
+            // 2. Se não, busca na API (Lazy Loading)
+            StartCoroutine(CarregarDetalhesDoMovimento(moveIndex, moveUrls[moveIndex]));
+            
+            // Mostra um "Loading" temporário
+            moveDetails_PP_Text.text = "--/--";
+            moveDetails_Type_Text.text = "Carregando...";
+        }
+    }
+
+    // Chamada quando o mouse sai do texto
+    public void OnMoveHoverExit()
+    {
+        ClearMoveDetailsUI();
+    }
+
+    // --- Coroutine para buscar PP e TIPO (Atualizada) ---
+    private IEnumerator CarregarDetalhesDoMovimento(int moveIndex, string moveUrl)
     {
         UnityWebRequest request = UnityWebRequest.Get(moveUrl);
         yield return request.SendWebRequest();
@@ -118,62 +149,66 @@ public class PokeController : MonoBehaviour
             yield break;
         }
 
-        // 1. Pegar o JSON do movimento
         string jsonResponse = request.downloadHandler.text;
-
-        // 2. Converter usando nossas NOVAS classes
         MoveDetails moveDetails = JsonUtility.FromJson<MoveDetails>(jsonResponse);
 
-        // 3. Extrair os dados
-        int pp = moveDetails.pp;
-        string typeName = CapitalizeFirstLetter(moveDetails.type.name);
+        // Salva os dados no cache
+        moveCache[moveIndex] = moveDetails;
 
-        Debug.Log("Detalhes do Movimento: " + typeName + ", PP: " + pp);
+        // Atualiza a UI com os dados recém-baixados
+        UpdateMoveDetailsUI(moveDetails);
+    }
 
-        // 4. Atualizar a UI
-        if (move1_PP_Text != null)
+    // --- Funções Auxiliares de UI ---
+
+    // Atualiza a UI de PP e Tipo
+    private void UpdateMoveDetailsUI(MoveDetails details)
+    {
+        if (moveDetails_PP_Text != null)
         {
-            // (Assumindo que o PP atual é igual ao máximo no início)
-            move1_PP_Text.text = "PP " + pp + " / " + pp;
+            moveDetails_PP_Text.text = details.pp + " / " + details.pp;
         }
-
-        if (move1_Type_Text != null)
+        if (moveDetails_Type_Text != null)
         {
-            move1_Type_Text.text = typeName;
+            moveDetails_Type_Text.text = CapitalizeFirstLetter(details.type.name);
         }
     }
 
+    // Limpa a UI de PP e Tipo (quando o mouse sai)
+    private void ClearMoveDetailsUI()
+    {
+        if (moveDetails_PP_Text != null)
+        {
+            moveDetails_PP_Text.text = "--/--";
+        }
+        if (moveDetails_Type_Text != null)
+        {
+            moveDetails_Type_Text.text = "Tipo"; // Ou deixe "" (vazio)
+        }
+    }
 
-    // --- Coroutine para baixar a IMAGEM (Sprite) ---
+    // --- Coroutine de Sprite (Sem alterações) ---
     private IEnumerator CarregarSprite(string url, Image targetImage)
     {
         UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
         yield return request.SendWebRequest();
-
-        if (request.result == UnityWebRequest.Result.Success)
-        {
+        if (request.result == UnityWebRequest.Result.Success) {
             Texture2D texture = ((DownloadHandlerTexture)request.downloadHandler).texture;
             texture.filterMode = FilterMode.Point; 
-            
             Sprite newSprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
             targetImage.sprite = newSprite;
-        }
-        else
-        {
+        } else {
             Debug.LogError("Erro no Sprite: " + request.error);
         }
     }
 
-    // --- Função Bônus: Para capitalizar nomes ---
+    // --- Função de Capitalizar (Sem alterações) ---
     private string CapitalizeFirstLetter(string input)
     {
-        if (string.IsNullOrEmpty(input))
-            return string.Empty;
-        
+        if (string.IsNullOrEmpty(input)) return string.Empty;
         input = input.Replace('-', ' ');
         string[] parts = input.Split(' ');
-        for(int i=0; i < parts.Length; i++)
-        {
+        for(int i=0; i < parts.Length; i++) {
             if(parts[i].Length > 0)
                 parts[i] = char.ToUpper(parts[i][0]) + parts[i].Substring(1);
         }
