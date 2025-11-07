@@ -1,140 +1,68 @@
 using System;
 
-
-
-// [Serializable] permite que a Unity entenda essas classes para o JsonUtility.
-
-
-
+// [Serializable] permite ao JsonUtility da Unity converter esta classe
 [Serializable]
-
 public class PokemonData
-
 {
-
-//O nome DEVE ser idêntico ao da API ("name")
-
+    // Nomes de variáveis devem ser idênticos aos da API
     public string name;
-
-
-//O nome DEVE ser idêntico ao da API ("sprites")
-
     public PokemonSprites sprites;
-
-
-
-//NOVO: Adicionando Stats
-
-    public PokemonStat[] stats;
-
-
-
-//Adicionando Moves
-
-    public PokemonMove[] moves;
-
+    public PokemonStat[] stats; // Um array para a lista de stats
+    public PokemonMove[] moves; // Um array para a lista de moves
 }
 
-
-
 [Serializable]
-
 public class PokemonSprites
-
 {
-
+    // URLs das imagens para extrair
     public string front_default;
-
     public string back_default;
-
 }
 
-
-
-//Classe para Stats
-
+// --- Classes para Stats ---
+// Estrutura aninhada do JSON de stats:
+// stats -> [ { "base_stat": 45, "stat": { "name": "hp" } } ]
 [Serializable]
-
 public class PokemonStat
-
 {
-
-    public int base_stat;
-
-    public Stat stat;
-
+    public int base_stat; // Valor (ex: 45)
+    public Stat stat;      // Objeto aninhado com o nome
 }
 
-
-
-//Classe para o nome do Stat (ex: "hp")
-
 [Serializable]
-
 public class Stat
-
 {
-
-    public string name;
-
+    public string name; // Nome (ex: "hp")
 }
 
-
-
-//NOVO: Classe para Moves
-
+// --- Classes para Moves ---
+// Estrutura aninhada do JSON de moves:
+// moves -> [ { "move": { "name": "tackle", "url": "..." } } ]
 [Serializable]
-
 public class PokemonMove
-
 {
-
     public Move move;
-
 }
 
-
-
-//NOVO: Classe para os detalhes do Move
-
 [Serializable]
-
-public class MoveDetails
-
-{
-
-    public int pp; // O PP que queremos
-
-    public MoveType type; // O Tipo que queremos
-
-}
-
-
-
-//Classe para o nome do Tipo
-
-[Serializable]
-
-public class MoveType
-
-{
-
-    public string name;
-
-}
-
-
-
-//Classe para o nome do Move
-
-[Serializable]
-
 public class Move
-
 {
+    public string name; // Nome do golpe
+    public string url;  // URL para detalhes (PP, Tipo)
+}
 
-    public string name;
+// --- Classes para Detalhes do Move ---
+// Molde para o JSON da URL de detalhes do golpe.
+[Serializable]
+public class MoveDetails
+{
+    // Obtem apenas os campos que interessa (pp e type)
+    public int pp;
+    public MoveType type;
+}
 
-    public string url;
-
+[Serializable]
+public class MoveType
+{
+    public string name; // Nome do tipo (ex: "normal")
 }

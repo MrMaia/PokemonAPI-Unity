@@ -1,28 +1,34 @@
 using UnityEngine;
-using UnityEngine.EventSystems; // Necessário para detectar o mouse
+using UnityEngine.EventSystems; // Necessário para as interfaces de evento
 
+// Implementa interfaces para eventos de mouse (PointerEnter, PointerExit)
 public class MoveHoverTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
-    // Crie estes campos públicos para configurar no Inspector
+    // --- Variáveis de Configuração (via Inspector) ---
+    
+    // Índice do golpe (0, 1, 2 ou 3)
     public int moveIndex;
+    
+    // Referência ao PokeController
     public PokeController pokeController;
 
-    // Esta função é chamada quando o mouse ENTRA na área do objeto
+    
+    // Chamado pela Unity quando o mouse entra
     public void OnPointerEnter(PointerEventData eventData)
     {
-        // Diz ao PokeController QUAL movimento está em foco
         if (pokeController != null)
         {
+            // Avisa o PokeController qual golpe está em foco
             pokeController.OnMoveHover(moveIndex);
         }
     }
 
-    // Esta função é chamada quando o mouse SAI da área do objeto
+    // Chamado pela Unity quando o mouse sai
     public void OnPointerExit(PointerEventData eventData)
     {
-        // Diz ao PokeController que o mouse saiu
         if (pokeController != null)
         {
+            // Avisa o PokeController que o mouse saiu
             pokeController.OnMoveHoverExit();
         }
     }
